@@ -1,100 +1,104 @@
 # SlotMind architecture decisions
 
+Accepted. Ranking stays swappable, accept stays atomic, and suggestion work leaves the request path.
+
 ## 1. Scheduling logic placement
 
 ### Context
 
-Booking has to stay conflict-safe, and the way a slot is chosen has to be replaceable. The HTTP suggest path and the background worker both need a ranking, and neither should own the ranking rules.
+A booking must be conflict-safe, and the ranking that proposes a slot must be replaceable. HTTP suggest and the background worker both need a ranking. Neither owns the rules.
 
 ### Options
 
-- Rank slots inside the controller.
-- Keep an if/else in the application service.
-- Give state transitions to the entities and ranking to a strategy port. Application services own the transactions.
+- Rank inside the controller.
+- Branch in the application service.
+- Entities own legal transitions. A strategy port owns ranking. Application services own the transactions.
 
 ### Decision
 
-Entities own the legal transitions. `SchedulingStrategy` returns an ordered list of recommendations and does not load the database. `BookingService`, `SuggestionWriter`, and `SuggestionDecisionService` own the transactions.
+Entities own legal transitions. `SchedulingStrategy` returns an ordered list of recommendations and does not load the database. `BookingService`, `SuggestionWriter`, and `SuggestionDecisionService` own the transactions.
 
-### Tradeoffs
+### Consequences
 
-There are more types than a single service method. The controller stays thin, the rules can be tested without HTTP, and a new ranking does not edit the booking transaction.
+The cost is extra types. The controller stays thin, ranking tests without HTTP, and a new ranking does not edit the booking transaction.
 
-## 2. Strategy switchability
+## 2. Strategy selection
 
 ### Context
 
-Rule-based ranking and the Gemini ranking must be selectable without recompiling, and the desk request and the outbox worker must not pick different strategies.
+Rule ranking and Gemini ranking must switch without a recompile. The desk request and the outbox worker must resolve the same strategy.
 
 ### Options
 
 - Branch in each caller.
-- Use `@Conditional` beans so only one strategy is on the classpath.
-- Register every `SchedulingStrategy` bean by `name()` and resolve `slotmind.scheduling.strategy` on each call.
+- Use `@Conditional` so only one strategy is on the classpath.
+- Register every `SchedulingStrategy` by `name()` and resolve `slotmind.scheduling.strategy` on each call.
 
 ### Decision
 
-`StrategyRegistry` resolves the config value on every call. HTTP suggest and the suggest job both call the registry. A later `RoomConstraintStrategy` is a new bean plus a config value. Callers stay unchanged. `reasoning` is a sentence the desk can read aloud. Slot and provider ids stay in the other fields.
+`StrategyRegistry` resolves the configured name on every call. HTTP suggest and the suggest job both call the registry. A new strategy is a bean plus a config value. Callers stay unchanged. `reasoning` is one sentence for the coordinator. Slot and provider ids stay in their own fields.
 
-### Tradeoffs
+### Consequences
 
-Changing the config takes a restart. Callers cannot drift, and adding a strategy does not require a registry edit.
+A config change takes a restart. Callers cannot drift, and adding a strategy does not edit the registry.
 
 ## 3. Transactional accept
 
 ### Context
 
-Accept finalizes a booking the patient has agreed to. It must update the appointment, the old slot, and the new slot together. Two coordinators can accept two suggestions that name the same open slot.
+Accept commits a booking the patient has agreed to. The appointment, the released slot, and the new slot must commit together. Two coordinators can accept suggestions that name the same open slot.
 
 ### Options
 
-- Hold a pessimistic lock on the slot.
-- Use `@Version` plus status guards in one transaction.
-- Rely on a database constraint alone.
+- Pessimistic lock on the slot.
+- `@Version` plus status guards in one transaction.
+- A database constraint alone.
 
 ### Decision
 
-One transaction requires the suggestion to be `PENDING`, the appointment to be `RESCHEDULE_PENDING`, and the new slot to be `OPEN`. It books the new slot, points the appointment at that slot and that slot's provider, sets the appointment to `RESCHEDULED`, and marks the suggestion `ACCEPTED`. A second accept of the same suggestion fails the `PENDING` guard. Two suggestions for one slot lose on `@Version` or the `OPEN` check, the loser rolls back, and the API returns 409. The losing appointment stays `RESCHEDULE_PENDING`.
+One transaction proceeds only when the suggestion is `PENDING`, the appointment is `RESCHEDULE_PENDING`, and the target slot is `OPEN`. It books the new slot, points the appointment at that slot and its provider, sets the appointment to `RESCHEDULED`, and marks the suggestion `ACCEPTED`. A second accept of the same suggestion fails the `PENDING` guard. Two suggestions for one slot lose on `@Version` or the `OPEN` check. The loser rolls back and the API returns 409. The losing appointment stays `RESCHEDULE_PENDING`.
 
-### Tradeoffs
+### Consequences
 
-The conflict is visible and retryable. The transaction does not stay open across the model call. A lost accept asks the desk to refresh.
+The conflict is explicit and safe to retry. The transaction does not span the model call. A lost race asks the desk to refresh.
 
 ## 4. Agentic loop decoupling
 
 ### Context
 
-Setting a provider `OFFLINE` affects every confirmed appointment for that provider. Cancelling a slot affects the one appointment on that slot. Both endpoints must return before suggestions exist. A crash must not drop the work, and a duplicate run must not create a second pending suggestion.
+Provider `OFFLINE` fans out to every confirmed appointment for that provider. Slot cancel affects the one appointment on that slot. Both endpoints must return before any suggestion exists. A crash must not drop the work. A replay must not create a second pending suggestion.
 
 ### Options
 
 - Publish an in-process event and handle it on another thread.
-- Do the fan-out and the model call inside one job.
+- Run fan-out and the model call inside one job.
 - Write a fan-out row in the status transaction, then child `SUGGEST` rows that a poller claims.
 
 ### Decision
 
-The PATCH transaction updates the status and inserts `FANOUT_PROVIDER_OFFLINE` or `FANOUT_SLOT_CANCELLED`, then returns. `ProviderOfflineFanout` and `SlotCancelledFanout` only choose the appointments. `RescheduleOrchestrator` enqueues one `SUGGEST` job per confirmed appointment. One suggest handler runs `SchedulingStrategy`. Gemini failures become the rule list inside the strategy, and that recommendation is still stored. The recommended slot stays `OPEN` until the desk accepts. A poller claims jobs with a conditional update and a lease. `findClaimableIds()` is the lookup a later CDC listener can replace. The reclaim scan for an expired lease stays.
+The PATCH transaction updates status and inserts `FANOUT_PROVIDER_OFFLINE` or `FANOUT_SLOT_CANCELLED`, then returns. `ProviderOfflineFanout` and `SlotCancelledFanout` select the appointments. `RescheduleOrchestrator` enqueues one `SUGGEST` job per confirmed appointment. The suggest handler runs `SchedulingStrategy`. A Gemini failure falls back to the rule list inside the strategy, and that recommendation is still stored. The recommended slot stays `OPEN` until the desk accepts. A poller claims jobs with a conditional update and a lease. `findClaimableIds()` is the lookup a later CDC listener can replace. Lease reclaim stays.
 
-### Tradeoffs
+### Consequences
 
-On H2 the worker wakes about once a second. The HTTP thread does not call the model. The job row is durable across a restart. CDC can replace the wake-up later without changing the handlers.
+On H2 the worker polls about once a second. The request thread never calls the model. The job row survives restart. CDC can replace the wake-up without changing the handlers.
 
 ## 5. Extensibility
 
 ### Context
 
-Sprint 2 adds room and equipment constraints. The callers that book, suggest, and accept should not change to support that.
+Sprint 2 adds room and equipment constraints. Book, suggest, and accept must not change to support that.
 
 ### Options
 
-- Edit the rule strategy so it also knows about rooms.
-- Add `RoomConstraintStrategy` as another implementation of `SchedulingStrategy`.
+- Fold rooms into the rule strategy.
+- Add `RoomConstraintStrategy` as another `SchedulingStrategy`.
 
 ### Decision
 
-A room strategy implements `SchedulingStrategy`, is a Spring bean with its own `name()`, and is selected with `slotmind.scheduling.strategy`. The registry, the suggest endpoint, and the worker stay as they are. This sprint does not build a patient portal, billing, waitlist auto-fill, notifications, CDC, or a database load study. The desk can list patients who are waiting for an opening. Nothing books them when a slot opens.
+A room strategy implements `SchedulingStrategy`, is a Spring bean with its own `name()`, and is selected by `slotmind.scheduling.strategy`. The registry, the suggest endpoint, and the worker stay as they are.
 
-### Tradeoffs
+Out of scope this sprint: patient portal, billing, waitlist auto-fill, notifications, CDC, and a database load study. The desk lists patients waiting for an opening. Nothing books them when a slot opens.
 
-The strategy sees only the context it is given today: the appointment, urgency, patient name, trigger, open slots, and the provider roster. A room strategy can use that contract immediately. Richer inputs, such as a room inventory, can be added to `SchedulingContext` without changing the method signature's callers.
+### Consequences
+
+A strategy sees only today's `SchedulingContext`: the appointment, urgency, patient name, trigger, open slots, and the provider roster. A room strategy can implement that contract now. A room inventory can be added to the context without changing callers.
