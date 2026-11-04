@@ -49,6 +49,29 @@ public class RescheduleOrchestrator {
         log.info("Enqueued suggest job for appointment {} trigger {}", appointment.getId(), trigger);
     }
 
+    /**
+     * Enqueues a suggest job for a visit that is already waiting.
+     * The appointment stays pending; this does not move a confirmed visit.
+     */
+    @Transactional
+    public void enqueueWaiting(Appointment appointment, TriggerReason trigger, String sourceId) {
+        if (appointment.getStatus() != AppointmentStatus.RESCHEDULE_PENDING) {
+            log.debug("Skipped waiting suggest for appointment {} in status {}", appointment.getId(), appointment.getStatus());
+            return;
+        }
+        String dedupeKey = "SUGGEST:" + trigger + ":" + appointment.getId() + ":" + sourceId;
+        if (jobs.existsByDedupeKey(dedupeKey)) {
+            log.debug("Suggest job already queued for waiting appointment {} trigger {}", appointment.getId(), trigger);
+            return;
+        }
+        jobs.save(new OutboxJob(
+                Ids.next("JOB-"),
+                JobType.SUGGEST,
+                dedupeKey,
+                payload(appointment.getId(), trigger, sourceId)));
+        log.info("Enqueued suggest job for waiting appointment {} trigger {}", appointment.getId(), trigger);
+    }
+
     private String payload(String appointmentId, TriggerReason trigger, String fanoutJobId) {
         try {
             return objectMapper.writeValueAsString(new SuggestJob(appointmentId, trigger, fanoutJobId));

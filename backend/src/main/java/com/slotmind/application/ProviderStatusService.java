@@ -2,14 +2,20 @@ package com.slotmind.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.slotmind.api.ProviderResponse;
+import com.slotmind.domain.Appointment;
+import com.slotmind.domain.AppointmentStatus;
 import com.slotmind.domain.Ids;
 import com.slotmind.domain.JobType;
 import com.slotmind.domain.NotFoundException;
 import com.slotmind.domain.OutboxJob;
 import com.slotmind.domain.Provider;
 import com.slotmind.domain.ProviderStatus;
+import com.slotmind.domain.SuggestionStatus;
+import com.slotmind.domain.TriggerReason;
+import com.slotmind.persistence.AppointmentRepository;
 import com.slotmind.persistence.OutboxJobRepository;
 import com.slotmind.persistence.ProviderRepository;
+import com.slotmind.persistence.SuggestionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,16 +27,25 @@ public class ProviderStatusService {
     private static final Logger log = LoggerFactory.getLogger(ProviderStatusService.class);
 
     private final ProviderRepository providers;
+    private final AppointmentRepository appointments;
+    private final SuggestionRepository suggestions;
+    private final RescheduleOrchestrator orchestrator;
     private final OutboxJobRepository jobs;
     private final AppointmentViews views;
     private final ObjectMapper objectMapper;
 
     public ProviderStatusService(
             ProviderRepository providers,
+            AppointmentRepository appointments,
+            SuggestionRepository suggestions,
+            RescheduleOrchestrator orchestrator,
             OutboxJobRepository jobs,
             AppointmentViews views,
             ObjectMapper objectMapper) {
         this.providers = providers;
+        this.appointments = appointments;
+        this.suggestions = suggestions;
+        this.orchestrator = orchestrator;
         this.jobs = jobs;
         this.views = views;
         this.objectMapper = objectMapper;
@@ -38,6 +53,7 @@ public class ProviderStatusService {
 
     /**
      * Changes a provider's status. Going offline enqueues one fan-out job for their confirmed appointments.
+     * Coming back to available enqueues a new suggestion for visits still waiting with no proposal.
      */
     @Transactional
     public ProviderResponse update(String providerId, ProviderStatus status) {
@@ -64,7 +80,22 @@ public class ProviderStatusService {
                 log.debug("Offline fan-out for provider {} already exists", providerId);
             }
         }
+        if (status == ProviderStatus.AVAILABLE) {
+            retryWaitingVisits(provider);
+        }
         return views.toProvider(provider);
+    }
+
+    /** Asks again for this provider's waiting visits that never received a suggestion. */
+    private void retryWaitingVisits(Provider provider) {
+        String sourceId = "AVAILABLE:" + provider.getId() + ":v" + provider.getVersion();
+        for (Appointment appointment : appointments.findByProviderAndStatus(provider.getId(), AppointmentStatus.RESCHEDULE_PENDING)) {
+            if (!suggestions.findByAppointmentAndStatus(appointment.getId(), SuggestionStatus.PENDING).isEmpty()) {
+                log.debug("Appointment {} already has a pending suggestion", appointment.getId());
+                continue;
+            }
+            orchestrator.enqueueWaiting(appointment, TriggerReason.PROVIDER_OFFLINE, sourceId);
+        }
     }
 
     private String json(String providerId) {

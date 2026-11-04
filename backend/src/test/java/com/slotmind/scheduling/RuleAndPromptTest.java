@@ -50,16 +50,23 @@ class RuleAndPromptTest {
 
     @Test
     void offlineAndCancelledPromptsDiffer() {
-        Provider sarah = new Provider("PRV-001", "Dr. Sarah Chen", Specialty.GENERAL, ProviderStatus.BUSY);
-        Slot current = new Slot("SLT-001", sarah, Instant.now().plus(1, ChronoUnit.HOURS), 30, SlotStatus.BOOKED);
-        Appointment appointment = new Appointment("APT-001", "John Martinez", AppointmentType.ROUTINE, sarah, current);
-        SchedulingContext offline = new SchedulingContext(appointment, TriggerReason.PROVIDER_OFFLINE, List.of(), List.of(sarah));
-        SchedulingContext cancelled = new SchedulingContext(appointment, TriggerReason.SLOT_CANCELLED, List.of(), List.of(sarah));
+        Provider sarahOffline = new Provider("PRV-001", "Dr. Sarah Chen", Specialty.GENERAL, ProviderStatus.OFFLINE);
+        Provider sarahBack = new Provider("PRV-001", "Dr. Sarah Chen", Specialty.GENERAL, ProviderStatus.AVAILABLE);
+        Slot current = new Slot("SLT-001", sarahOffline, Instant.now().plus(1, ChronoUnit.HOURS), 30, SlotStatus.BOOKED);
+        Slot currentBack = new Slot("SLT-001", sarahBack, Instant.now().plus(1, ChronoUnit.HOURS), 30, SlotStatus.BOOKED);
+        Appointment offlineVisit = new Appointment("APT-001", "John Martinez", AppointmentType.ROUTINE, sarahOffline, current);
+        Appointment returnedVisit = new Appointment("APT-001", "John Martinez", AppointmentType.ROUTINE, sarahBack, currentBack);
+        SchedulingContext offline = new SchedulingContext(offlineVisit, TriggerReason.PROVIDER_OFFLINE, List.of(), List.of(sarahOffline));
+        SchedulingContext returned = new SchedulingContext(returnedVisit, TriggerReason.PROVIDER_OFFLINE, List.of(), List.of(sarahBack));
+        SchedulingContext cancelled = new SchedulingContext(returnedVisit, TriggerReason.SLOT_CANCELLED, List.of(), List.of(sarahBack));
 
         String offlinePrompt = prompts.forContext(offline);
+        String returnedPrompt = prompts.forContext(returned);
         String cancelledPrompt = prompts.forContext(cancelled);
 
         assertTrue(offlinePrompt.contains("cannot be chosen"));
+        assertTrue(returnedPrompt.contains("same provider"));
+        assertFalse(returnedPrompt.contains("cannot be chosen"));
         assertTrue(cancelledPrompt.contains("same provider"));
         assertFalse(offlinePrompt.equals(cancelledPrompt));
         assertTrue(offlinePrompt.contains("John Martinez"));

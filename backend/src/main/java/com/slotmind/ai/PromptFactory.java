@@ -16,7 +16,7 @@ public class PromptFactory {
     /** Builds the ranking prompt, including a spoken-reasoning instruction and the open slots. */
     public String forContext(SchedulingContext context) {
         TriggerReason trigger = context.trigger();
-        String situation = trigger == TriggerReason.PROVIDER_OFFLINE
+        String situation = trigger == TriggerReason.PROVIDER_OFFLINE && context.appointment().getProvider().isOffline()
                 ? offlineInstruction(context)
                 : sameProviderInstruction(context);
         return """

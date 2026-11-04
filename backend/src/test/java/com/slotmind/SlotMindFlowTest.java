@@ -210,6 +210,76 @@ class SlotMindFlowTest {
     }
 
     @Test
+    void availableProviderSuggestsAWaitingVisitThatHadNoMatch() throws Exception {
+        mockMvc.perform(patch("/providers/PRV-003/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"OFFLINE\"}"))
+                .andExpect(status().isOk());
+        String fanoutId = jobs.findAll().stream()
+                .filter(job -> job.getJobType() == JobType.FANOUT_PROVIDER_OFFLINE)
+                .findFirst()
+                .orElseThrow()
+                .getId();
+        claim(fanoutId);
+        worker.process(fanoutId);
+        jobs.findAll().stream()
+                .filter(job -> job.getJobType() == JobType.SUGGEST)
+                .forEach(job -> worker.applySuggestion(job.getId()));
+
+        JsonNode waiting = appointment("APT-003");
+        assertEquals("RESCHEDULE_PENDING", waiting.path("status").asText());
+        assertEquals(true, waiting.path("suggestion").isNull());
+
+        mockMvc.perform(patch("/providers/PRV-003/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"AVAILABLE\"}"))
+                .andExpect(status().isOk());
+        var retry = jobs.findAll().stream()
+                .filter(job -> job.getDedupeKey() != null && job.getDedupeKey().contains("AVAILABLE"))
+                .findFirst()
+                .orElseThrow();
+        worker.applySuggestion(retry.getId());
+
+        JsonNode suggested = appointment("APT-003");
+        assertEquals("PENDING", suggested.path("suggestion").path("status").asText());
+        assertEquals("SLT-1160", suggested.path("suggestion").path("recommendedSlotId").asText());
+        assertEquals("Dr. Priya Sharma", suggested.path("suggestion").path("providerName").asText());
+
+        mockMvc.perform(patch("/providers/PRV-003/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"AVAILABLE\"}"))
+                .andExpect(status().isOk());
+        assertEquals(1, jobs.findAll().stream().filter(job -> job.getDedupeKey().contains("AVAILABLE")).count());
+    }
+
+    @Test
+    void availableProviderLeavesAnExistingSuggestionInPlace() throws Exception {
+        mockMvc.perform(patch("/providers/PRV-001/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"OFFLINE\"}"))
+                .andExpect(status().isOk());
+        String fanoutId = jobs.findAll().stream()
+                .filter(job -> job.getJobType() == JobType.FANOUT_PROVIDER_OFFLINE)
+                .findFirst()
+                .orElseThrow()
+                .getId();
+        claim(fanoutId);
+        worker.process(fanoutId);
+        jobs.findAll().stream()
+                .filter(job -> job.getJobType() == JobType.SUGGEST)
+                .forEach(job -> worker.applySuggestion(job.getId()));
+        long suggestJobs = jobs.countByJobType(JobType.SUGGEST);
+
+        mockMvc.perform(patch("/providers/PRV-001/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"AVAILABLE\"}"))
+                .andExpect(status().isOk());
+
+        assertEquals(suggestJobs, jobs.countByJobType(JobType.SUGGEST));
+        assertEquals("PENDING", appointment("APT-001").path("suggestion").path("status").asText());
+    }
+
+    @Test
     void cancelledSlotCreatesOneSuggestion() throws Exception {
         mockMvc.perform(patch("/slots/SLT-003/status")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -274,5 +344,19 @@ class SlotMindFlowTest {
 
     private void claim(String jobId) {
         jobs.claim(jobId, worker.workerId(), Instant.now().plusSeconds(30), Instant.now());
+    }
+
+    private JsonNode appointment(String id) throws Exception {
+        JsonNode appointments = objectMapper.readTree(mockMvc.perform(get("/appointments"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+        for (JsonNode appointment : appointments) {
+            if (id.equals(appointment.path("id").asText())) {
+                return appointment;
+            }
+        }
+        throw new AssertionError("Missing appointment " + id);
     }
 }
