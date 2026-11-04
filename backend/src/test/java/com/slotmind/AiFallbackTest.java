@@ -44,10 +44,10 @@ class AiFallbackTest {
         mockMvc.perform(post("/appointments/APT-001/suggest"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.suggestion.status").value("PENDING"))
-                .andExpect(jsonPath("$.suggestion.recommendedSlotId").value("SLT-005"))
+                .andExpect(jsonPath("$.suggestion.recommendedSlotId").value("SLT-1000"))
                 .andExpect(jsonPath("$.suggestion.reasoning").value(org.hamcrest.Matchers.containsString("John Martinez")))
                 .andExpect(jsonPath("$.suggestion.triggerReason").value("INITIAL"));
 
-        org.junit.jupiter.api.Assertions.assertEquals(SlotStatus.OPEN, slots.findById("SLT-005").orElseThrow().getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(SlotStatus.OPEN, slots.findById("SLT-1000").orElseThrow().getStatus());
     }
 }

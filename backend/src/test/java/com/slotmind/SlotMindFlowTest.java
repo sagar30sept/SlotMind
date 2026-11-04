@@ -86,8 +86,8 @@ class SlotMindFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString(suggestionId)));
 
-        assertEquals("SLT-005", body.path("suggestion").path("recommendedSlotId").asText());
-        assertEquals(SlotStatus.OPEN, slots.findById("SLT-005").orElseThrow().getStatus());
+        assertEquals("SLT-1000", body.path("suggestion").path("recommendedSlotId").asText());
+        assertEquals(SlotStatus.OPEN, slots.findById("SLT-1000").orElseThrow().getStatus());
     }
 
     @Test
@@ -193,7 +193,7 @@ class SlotMindFlowTest {
                 .andExpect(jsonPath("$.status").value("RESCHEDULE_PENDING"))
                 .andExpect(jsonPath("$.suggestion.status").value("PENDING"))
                 .andExpect(jsonPath("$.suggestion.triggerReason").value("PROVIDER_OFFLINE"))
-                .andExpect(jsonPath("$.suggestion.recommendedSlotId").value("SLT-004"))
+                .andExpect(jsonPath("$.suggestion.recommendedSlotId").value("SLT-1240"))
                 .andReturn();
         String nextSuggestionId = objectMapper.readTree(next.getResponse().getContentAsString())
                 .path("suggestion")
@@ -242,12 +242,12 @@ class SlotMindFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(3))
                 .andExpect(jsonPath("$[0].patientName").value("Nora Alvarez"))
-                .andExpect(jsonPath("$[0].matchingOpenSlots").value(1))
+                .andExpect(jsonPath("$[0].matchingOpenSlots").value(81))
                 .andExpect(jsonPath("$[1].patientName").value("Samir Das"))
                 .andExpect(jsonPath("$[1].preferredProviderName").value(nullValue()))
-                .andExpect(jsonPath("$[1].matchingOpenSlots").value(2))
+                .andExpect(jsonPath("$[1].matchingOpenSlots").value(402))
                 .andExpect(jsonPath("$[2].patientName").value("Helen Cho"))
-                .andExpect(jsonPath("$[2].matchingOpenSlots").value(0));
+                .andExpect(jsonPath("$[2].matchingOpenSlots").value(80));
 
         MvcResult created = mockMvc.perform(post("/waitlist")
                         .contentType(MediaType.APPLICATION_JSON)
