@@ -1,0 +1,17 @@
+logging:
+  level:
+    com.slotmind: INFO
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:slotmind-flow;DB_CLOSE_DELAY=0
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+slotmind:
+  scheduling:
+    strategy: rule
+  worker:
+    poll-ms: 600000
+    initial-delay-ms: 600000
