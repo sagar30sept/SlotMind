@@ -27,11 +27,12 @@ public class RescheduleOrchestrator {
     }
 
     /**
-     * Marks a confirmed appointment as waiting and enqueues one suggest job for this fan-out.
+     * Marks a booked (confirmed or already rescheduled) appointment as waiting
+     * and enqueues one suggest job for this fan-out.
      */
     @Transactional
     public void enqueue(Appointment appointment, TriggerReason trigger, String fanoutJobId) {
-        if (appointment.getStatus() != AppointmentStatus.CONFIRMED) {
+        if (!AppointmentStatus.MOVABLE.contains(appointment.getStatus())) {
             log.debug("Skipped suggest for appointment {} in status {}", appointment.getId(), appointment.getStatus());
             return;
         }

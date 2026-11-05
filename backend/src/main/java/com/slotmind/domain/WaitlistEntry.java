@@ -19,8 +19,9 @@ public class WaitlistEntry {
     @Id
     private String id;
 
-    @Column(name = "patient_name", nullable = false)
-    private String patientName;
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "patient_id", nullable = false)
+    private Patient patient;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "appointment_type", nullable = false)
@@ -41,13 +42,13 @@ public class WaitlistEntry {
 
     public WaitlistEntry(
             String id,
-            String patientName,
+            Patient patient,
             AppointmentType appointmentType,
             Provider preferredProvider,
             String note,
             Instant createdAt) {
         this.id = id;
-        this.patientName = patientName;
+        this.patient = patient;
         this.appointmentType = appointmentType;
         this.preferredProvider = preferredProvider;
         this.note = note;
@@ -58,8 +59,12 @@ public class WaitlistEntry {
         return id;
     }
 
+    public Patient getPatient() {
+        return patient;
+    }
+
     public String getPatientName() {
-        return patientName;
+        return patient.getFullName();
     }
 
     public AppointmentType getAppointmentType() {

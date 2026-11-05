@@ -62,14 +62,14 @@ class SlotMindFlowTest {
         mockMvc.perform(post("/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"patientName":"Ada Lovelace","appointmentType":"ROUTINE","providerId":"PRV-004","slotId":"SLT-005"}
+                                {"patientId":"PAT-008","appointmentType":"ROUTINE","providerId":"PRV-004","slotId":"SLT-005"}
                                 """))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"patientName":"Grace Hopper","appointmentType":"FOLLOW_UP","providerId":"PRV-004","slotId":"SLT-005"}
+                                {"patientId":"PAT-009","appointmentType":"FOLLOW_UP","providerId":"PRV-004","slotId":"SLT-005"}
                                 """))
                 .andExpect(status().isConflict());
     }
@@ -322,7 +322,7 @@ class SlotMindFlowTest {
         MvcResult created = mockMvc.perform(post("/waitlist")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"patientName":"Mina Shah","appointmentType":"ROUTINE","preferredProviderId":"PRV-004","note":"Afternoon if possible"}
+                                {"patientId":"PAT-002","appointmentType":"ROUTINE","preferredProviderId":"PRV-004","note":"Afternoon if possible"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.preferredProviderName").value("Dr. Rahul Verma"))
@@ -338,7 +338,7 @@ class SlotMindFlowTest {
                 .andExpect(status().isNotFound());
         mockMvc.perform(post("/waitlist")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"patientName\":\"   \",\"appointmentType\":\"ROUTINE\"}"))
+                        .content("{\"patientId\":\"   \",\"appointmentType\":\"ROUTINE\"}"))
                 .andExpect(status().isBadRequest());
     }
 

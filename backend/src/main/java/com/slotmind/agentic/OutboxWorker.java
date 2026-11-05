@@ -99,28 +99,28 @@ public class OutboxWorker {
                 now));
     }
 
-    /** Enqueues one suggest job for each confirmed appointment of the offline provider. */
+    /** Enqueues one suggest job for each booked (confirmed or rescheduled) visit of the offline provider. */
     private void fanoutProvider(OutboxJob job) {
         transaction.executeWithoutResult(status -> {
             if (!owns(job.getId())) {
                 return;
             }
             String providerId = read(jobs.findById(job.getId()).orElseThrow().getPayload()).path("providerId").asText();
-            appointments.findByProviderAndStatus(providerId, AppointmentStatus.CONFIRMED)
+            appointments.findByProviderAndStatusIn(providerId, AppointmentStatus.MOVABLE)
                     .forEach(appointment -> orchestrator.enqueue(appointment, TriggerReason.PROVIDER_OFFLINE, job.getId()));
             jobs.complete(job.getId(), workerId, Instant.now());
         });
         log.info("Completed provider offline fan-out {}", job.getId());
     }
 
-    /** Enqueues one suggest job for the confirmed appointment on the cancelled slot. */
+    /** Enqueues one suggest job for the booked visit on the cancelled slot. */
     private void fanoutSlot(OutboxJob job) {
         transaction.executeWithoutResult(status -> {
             if (!owns(job.getId())) {
                 return;
             }
             String slotId = read(jobs.findById(job.getId()).orElseThrow().getPayload()).path("slotId").asText();
-            appointments.findBySlotAndStatus(slotId, AppointmentStatus.CONFIRMED)
+            appointments.findBySlotAndStatusIn(slotId, AppointmentStatus.MOVABLE)
                     .forEach(appointment -> orchestrator.enqueue(appointment, TriggerReason.SLOT_CANCELLED, job.getId()));
             jobs.complete(job.getId(), workerId, Instant.now());
         });
@@ -133,6 +133,19 @@ public class OutboxWorker {
         JsonNode payload = read(job.getPayload());
         String appointmentId = payload.path("appointmentId").asText();
         TriggerReason trigger = TriggerReason.valueOf(payload.path("triggerReason").asText());
+        AppointmentStatus current = appointments.findById(appointmentId)
+                .map(appointment -> appointment.getStatus())
+                .orElse(null);
+        if (current != AppointmentStatus.RESCHEDULE_PENDING) {
+            // The desk cancelled or already moved this visit after the job was queued.
+            transaction.executeWithoutResult(status -> {
+                if (owns(jobId)) {
+                    jobs.complete(jobId, workerId, Instant.now());
+                }
+            });
+            log.info("Skipped suggest job {}: appointment {} is {}", jobId, appointmentId, current);
+            return;
+        }
         var recommendations = suggestService.recommend(appointmentId, trigger);
         try {
             transaction.executeWithoutResult(status -> {

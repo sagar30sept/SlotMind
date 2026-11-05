@@ -38,7 +38,7 @@ class ApiErrorHandlingTest {
         mockMvc.perform(post("/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"patientName":"Ada Lovelace","appointmentType":"ROUTINE","providerId":"PRV-004","slotId":"SLT-005"}
+                                {"patientId":"PAT-008","appointmentType":"ROUTINE","providerId":"PRV-004","slotId":"SLT-005"}
                                 """))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL"))

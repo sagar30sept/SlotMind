@@ -6,6 +6,7 @@ import java.time.Instant;
 
 public record WaitlistResponse(
         String id,
+        String patientId,
         String patientName,
         AppointmentType appointmentType,
         String preferredProviderId,

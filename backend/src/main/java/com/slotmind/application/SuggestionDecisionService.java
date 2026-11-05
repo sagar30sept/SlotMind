@@ -21,10 +21,15 @@ public class SuggestionDecisionService {
 
     private final SuggestionRepository suggestions;
     private final AppointmentViews views;
+    private final PatientScheduleGuard guard;
 
-    public SuggestionDecisionService(SuggestionRepository suggestions, AppointmentViews views) {
+    public SuggestionDecisionService(
+            SuggestionRepository suggestions,
+            AppointmentViews views,
+            PatientScheduleGuard guard) {
         this.suggestions = suggestions;
         this.views = views;
+        this.guard = guard;
     }
 
     /**
@@ -52,6 +57,7 @@ public class SuggestionDecisionService {
         if (newSlot.getProvider().isOffline()) {
             throw new DomainException("PROVIDER_OFFLINE", newSlot.getProvider().getName() + " is offline");
         }
+        guard.requireFree(appointment, newSlot);
         Slot oldSlot = appointment.getSlot();
         if (suggestion.getTriggerReason() != TriggerReason.SLOT_CANCELLED) {
             oldSlot.release();

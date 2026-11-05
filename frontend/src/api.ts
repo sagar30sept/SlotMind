@@ -1,4 +1,15 @@
-import type { ApiError, Appointment, AppointmentType, Provider, ProviderStatus, Slot, SlotStatus, WaitlistEntry } from "./types";
+import type {
+  ApiError,
+  Appointment,
+  AppointmentType,
+  Patient,
+  PatientDetail,
+  Provider,
+  ProviderStatus,
+  Slot,
+  SlotStatus,
+  WaitlistEntry,
+} from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -39,7 +50,7 @@ export function fetchSlots(): Promise<Slot[]> {
 }
 
 export function book(body: {
-  patientName: string;
+  patientId: string;
   appointmentType: AppointmentType;
   providerId: string;
   slotId: string;
@@ -68,7 +79,7 @@ export function fetchWaitlist(): Promise<WaitlistEntry[]> {
 }
 
 export function addToWaitlist(body: {
-  patientName: string;
+  patientId: string;
   appointmentType: AppointmentType;
   preferredProviderId?: string;
   note?: string;
@@ -78,4 +89,31 @@ export function addToWaitlist(body: {
 
 export function removeFromWaitlist(id: string): Promise<void> {
   return request(`/waitlist/${id}`, { method: "DELETE" });
+}
+
+export function searchPatients(query: string): Promise<Patient[]> {
+  return request(`/patients?q=${encodeURIComponent(query)}`);
+}
+
+export function createPatient(body: {
+  fullName: string;
+  phone: string;
+  email?: string;
+  dateOfBirth?: string;
+}): Promise<Patient> {
+  return request("/patients", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function fetchPatient(id: string): Promise<PatientDetail> {
+  return request(`/patients/${id}`);
+}
+
+export function cancelAppointment(id: string, reason?: string): Promise<Appointment> {
+  return request(`/appointments/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) });
+}
+
+export type VisitAction = "check-in" | "complete" | "no-show" | "reschedule";
+
+export function visitAction(id: string, action: VisitAction): Promise<Appointment> {
+  return request(`/appointments/${id}/${action}`, { method: "POST" });
 }

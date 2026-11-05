@@ -2,6 +2,7 @@ package com.slotmind.scheduling;
 
 import com.slotmind.ai.PromptFactory;
 import com.slotmind.domain.Appointment;
+import com.slotmind.domain.Patient;
 import com.slotmind.domain.AppointmentType;
 import com.slotmind.domain.Provider;
 import com.slotmind.domain.ProviderStatus;
@@ -21,6 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RuleAndPromptTest {
 
+    private static final Patient JOHN =
+            new Patient("PAT-001", "John Martinez", "+1-555-0101", null, null, java.time.Instant.now());
+
     private final PromptFactory prompts = new PromptFactory();
     private final RuleBasedStrategy rules = new RuleBasedStrategy();
 
@@ -33,7 +37,7 @@ class RuleAndPromptTest {
         Slot laterGeneral = new Slot("SLT-005", rahul, Instant.now().plus(150, ChronoUnit.MINUTES), 30, SlotStatus.OPEN);
         Slot soonerGeneral = new Slot("SLT-007", rahul, Instant.now().plus(90, ChronoUnit.MINUTES), 30, SlotStatus.OPEN);
         Slot specialist = new Slot("SLT-004", james, Instant.now().plus(30, ChronoUnit.MINUTES), 30, SlotStatus.OPEN);
-        Appointment appointment = new Appointment("APT-001", "John Martinez", AppointmentType.ROUTINE, sarah, current);
+        Appointment appointment = new Appointment("APT-001", JOHN, AppointmentType.ROUTINE, sarah, current);
 
         List<Recommendation> ordered = rules.recommend(new SchedulingContext(
                 appointment,
@@ -54,8 +58,8 @@ class RuleAndPromptTest {
         Provider sarahBack = new Provider("PRV-001", "Dr. Sarah Chen", Specialty.GENERAL, ProviderStatus.AVAILABLE);
         Slot current = new Slot("SLT-001", sarahOffline, Instant.now().plus(1, ChronoUnit.HOURS), 30, SlotStatus.BOOKED);
         Slot currentBack = new Slot("SLT-001", sarahBack, Instant.now().plus(1, ChronoUnit.HOURS), 30, SlotStatus.BOOKED);
-        Appointment offlineVisit = new Appointment("APT-001", "John Martinez", AppointmentType.ROUTINE, sarahOffline, current);
-        Appointment returnedVisit = new Appointment("APT-001", "John Martinez", AppointmentType.ROUTINE, sarahBack, currentBack);
+        Appointment offlineVisit = new Appointment("APT-001", JOHN, AppointmentType.ROUTINE, sarahOffline, current);
+        Appointment returnedVisit = new Appointment("APT-001", JOHN, AppointmentType.ROUTINE, sarahBack, currentBack);
         SchedulingContext offline = new SchedulingContext(offlineVisit, TriggerReason.PROVIDER_OFFLINE, List.of(), List.of(sarahOffline));
         SchedulingContext returned = new SchedulingContext(returnedVisit, TriggerReason.PROVIDER_OFFLINE, List.of(), List.of(sarahBack));
         SchedulingContext cancelled = new SchedulingContext(returnedVisit, TriggerReason.SLOT_CANCELLED, List.of(), List.of(sarahBack));

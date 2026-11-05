@@ -7,6 +7,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/appointments": "http://localhost:8080",
+      "/patients": "http://localhost:8080",
       "/providers": "http://localhost:8080",
       "/slots": "http://localhost:8080",
       "/suggestions": "http://localhost:8080",

@@ -414,8 +414,19 @@ INSERT INTO slots (id, provider_id, start_time, duration_minutes, status, versio
 ('SLT-1398', 'PRV-005', DATEADD('MINUTE', 960, DATEADD('DAY', 5, CAST(CURRENT_DATE AS TIMESTAMP))), 30, 'OPEN', 0),
 ('SLT-1399', 'PRV-005', DATEADD('MINUTE', 990, DATEADD('DAY', 5, CAST(CURRENT_DATE AS TIMESTAMP))), 30, 'OPEN', 0);
 
-INSERT INTO appointments (id, patient_name, appointment_type, provider_id, slot_id, status, version) VALUES
-('APT-001', 'John Martinez', 'ROUTINE', 'PRV-001', 'SLT-001', 'CONFIRMED', 0),
-('APT-002', 'Emily Watson', 'FOLLOW_UP', 'PRV-001', 'SLT-002', 'CONFIRMED', 0),
-('APT-003', 'Aisha Patel', 'URGENT', 'PRV-003', 'SLT-003', 'CONFIRMED', 0),
-('APT-004', 'Robert Kim', 'ROUTINE', 'PRV-005', 'SLT-006', 'CONFIRMED', 0);
+INSERT INTO patients (id, full_name, phone, email, date_of_birth, created_at, version) VALUES
+('PAT-001', 'John Martinez', '+1-555-0101', 'john.martinez@example.com', DATE '1978-04-12', CURRENT_TIMESTAMP, 0),
+('PAT-002', 'Emily Watson', '+1-555-0102', 'emily.watson@example.com', DATE '1990-09-30', CURRENT_TIMESTAMP, 0),
+('PAT-003', 'Aisha Patel', '+1-555-0103', NULL, DATE '2016-02-08', CURRENT_TIMESTAMP, 0),
+('PAT-004', 'Robert Kim', '+1-555-0104', 'robert.kim@example.com', DATE '1965-11-21', CURRENT_TIMESTAMP, 0),
+('PAT-005', 'Nora Alvarez', '+1-555-0105', NULL, DATE '1988-06-17', CURRENT_TIMESTAMP, 0),
+('PAT-006', 'Samir Das', '+1-555-0106', 'samir.das@example.com', DATE '1995-01-03', CURRENT_TIMESTAMP, 0),
+('PAT-007', 'Helen Cho', '+1-555-0107', NULL, DATE '1972-08-25', CURRENT_TIMESTAMP, 0),
+('PAT-008', 'Ada Lovelace', '+1-555-0108', 'ada@example.com', DATE '1985-12-10', CURRENT_TIMESTAMP, 0),
+('PAT-009', 'Grace Hopper', '+1-555-0109', 'grace@example.com', DATE '1980-12-09', CURRENT_TIMESTAMP, 0);
+
+INSERT INTO appointments (id, patient_id, appointment_type, provider_id, slot_id, status, version) VALUES
+('APT-001', 'PAT-001', 'ROUTINE', 'PRV-001', 'SLT-001', 'CONFIRMED', 0),
+('APT-002', 'PAT-002', 'FOLLOW_UP', 'PRV-001', 'SLT-002', 'CONFIRMED', 0),
+('APT-003', 'PAT-003', 'URGENT', 'PRV-003', 'SLT-003', 'CONFIRMED', 0),
+('APT-004', 'PAT-004', 'ROUTINE', 'PRV-005', 'SLT-006', 'CONFIRMED', 0);

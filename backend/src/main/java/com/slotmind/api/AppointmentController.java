@@ -4,6 +4,7 @@ import com.slotmind.ai.LlmException;
 import com.slotmind.ai.LlmGateway;
 import com.slotmind.ai.LlmSuggestionParser;
 import com.slotmind.ai.PromptFactory;
+import com.slotmind.application.AppointmentLifecycleService;
 import com.slotmind.application.BookingService;
 import com.slotmind.application.DeskQueryService;
 import com.slotmind.application.SuggestService;
@@ -49,6 +50,7 @@ public class AppointmentController {
     private final PromptFactory prompts;
     private final LlmSuggestionParser parser;
     private final Executor suggestStreamExecutor;
+    private final AppointmentLifecycleService lifecycle;
 
     public AppointmentController(
             BookingService booking,
@@ -60,7 +62,8 @@ public class AppointmentController {
             LlmGateway gateway,
             PromptFactory prompts,
             LlmSuggestionParser parser,
-            @Qualifier("suggestStreamExecutor") Executor suggestStreamExecutor) {
+            @Qualifier("suggestStreamExecutor") Executor suggestStreamExecutor,
+            AppointmentLifecycleService lifecycle) {
         this.booking = booking;
         this.desk = desk;
         this.suggestService = suggestService;
@@ -71,6 +74,7 @@ public class AppointmentController {
         this.prompts = prompts;
         this.parser = parser;
         this.suggestStreamExecutor = suggestStreamExecutor;
+        this.lifecycle = lifecycle;
     }
 
     /** Creates a confirmed appointment on an open slot. */
@@ -83,6 +87,44 @@ public class AppointmentController {
     @GetMapping("/appointments")
     public List<AppointmentResponse> list(@RequestParam(required = false) AppointmentStatus status) {
         return desk.appointments(status);
+    }
+
+    /** Returns one appointment with its latest suggestion. */
+    @GetMapping("/appointments/{id}")
+    public AppointmentResponse get(@PathVariable String id) {
+        return lifecycle.get(id);
+    }
+
+    /** Cancels a visit and reopens its slot. */
+    @PostMapping("/appointments/{id}/cancel")
+    public AppointmentResponse cancel(
+            @PathVariable String id,
+            @Valid @RequestBody(required = false) CancelAppointmentRequest request) {
+        return lifecycle.cancel(id, request == null ? null : request.reason());
+    }
+
+    /** Checks the patient in, from an hour before the visit until it ends. */
+    @PostMapping("/appointments/{id}/check-in")
+    public AppointmentResponse checkIn(@PathVariable String id) {
+        return lifecycle.checkIn(id);
+    }
+
+    /** Marks a checked-in visit as finished. */
+    @PostMapping("/appointments/{id}/complete")
+    public AppointmentResponse complete(@PathVariable String id) {
+        return lifecycle.complete(id);
+    }
+
+    /** Records that the patient missed a visit that has started. */
+    @PostMapping("/appointments/{id}/no-show")
+    public AppointmentResponse noShow(@PathVariable String id) {
+        return lifecycle.noShow(id);
+    }
+
+    /** Queues a booked visit for rescheduling; the proposal arrives asynchronously. */
+    @PostMapping("/appointments/{id}/reschedule")
+    public ResponseEntity<AppointmentResponse> reschedule(@PathVariable String id) {
+        return ResponseEntity.accepted().body(lifecycle.requestReschedule(id));
     }
 
     /** Returns a stored or newly ranked reschedule suggestion. */
