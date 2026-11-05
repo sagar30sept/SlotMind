@@ -71,7 +71,7 @@ public class SuggestService {
         return writer.write(appointmentId, nextTrigger(context), recommendations);
     }
 
-    /** Ranks open slots for an appointment that is confirmed or waiting to be rescheduled. */
+    /** Ranks open slots for an appointment that is booked or waiting to be rescheduled. */
     public List<Recommendation> recommend(String appointmentId, TriggerReason trigger) {
         return registry.recommend(requireSuggestable(appointmentId, trigger));
     }
@@ -80,7 +80,7 @@ public class SuggestService {
     public SchedulingContext requireSuggestable(String appointmentId, TriggerReason trigger) {
         SchedulingContext context = contexts.build(appointmentId, trigger);
         AppointmentStatus status = context.appointment().getStatus();
-        if (status != AppointmentStatus.CONFIRMED && status != AppointmentStatus.RESCHEDULE_PENDING) {
+        if (!AppointmentStatus.MOVABLE.contains(status) && status != AppointmentStatus.RESCHEDULE_PENDING) {
             throw new DomainException(
                     "ILLEGAL_TRANSITION",
                     "Appointment " + appointmentId + " cannot be rescheduled from " + status);
@@ -102,12 +102,16 @@ public class SuggestService {
                 .map(suggestion -> views.toResponse(suggestion.getAppointment(), suggestion));
     }
 
-    /** Keeps the original trigger while the appointment is still waiting on the desk. */
+    /**
+     * Keeps the original trigger while the appointment is still waiting on the desk.
+     * An accepted suggestion closed an earlier move, so it does not carry over to a new one.
+     */
     private TriggerReason nextTrigger(SchedulingContext context) {
         if (context.appointment().getStatus() != AppointmentStatus.RESCHEDULE_PENDING) {
             return TriggerReason.INITIAL;
         }
         return suggestions.findFirstByAppointment_IdOrderByCreatedAtDesc(context.appointment().getId())
+                .filter(latest -> latest.getStatus() != SuggestionStatus.ACCEPTED)
                 .map(RescheduleSuggestion::getTriggerReason)
                 .orElse(TriggerReason.INITIAL);
     }

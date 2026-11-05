@@ -1,12 +1,14 @@
 package com.slotmind.application;
 
 import com.slotmind.api.AppointmentResponse;
+import com.slotmind.api.PatientResponse;
 import com.slotmind.api.ProviderResponse;
 import com.slotmind.api.SlotResponse;
 import com.slotmind.api.SuggestionResponse;
 import com.slotmind.domain.Appointment;
 import com.slotmind.domain.JobStatus;
 import com.slotmind.domain.JobType;
+import com.slotmind.domain.Patient;
 import com.slotmind.domain.Provider;
 import com.slotmind.domain.RescheduleSuggestion;
 import com.slotmind.domain.Slot;
@@ -56,6 +58,7 @@ public class AppointmentViews {
         }
         return new AppointmentResponse(
                 appointment.getId(),
+                appointment.getPatient().getId(),
                 appointment.getPatientName(),
                 appointment.getAppointmentType(),
                 appointment.getProvider().getId(),
@@ -64,6 +67,8 @@ public class AppointmentViews {
                 appointment.getSlot().getStartTime(),
                 appointment.getSlot().getDurationMinutes(),
                 appointment.getStatus(),
+                appointment.getCancelReason(),
+                appointment.getCheckedInAt(),
                 suggestion == null ? null : toSuggestion(suggestion),
                 lastError);
     }
@@ -81,6 +86,15 @@ public class AppointmentViews {
                 suggestion.getReasoning(),
                 suggestion.getTriggerReason(),
                 suggestion.getStatus());
+    }
+
+    public PatientResponse toPatient(Patient patient) {
+        return new PatientResponse(
+                patient.getId(),
+                patient.getFullName(),
+                patient.getPhone(),
+                patient.getEmail(),
+                patient.getDateOfBirth());
     }
 
     public ProviderResponse toProvider(Provider provider) {

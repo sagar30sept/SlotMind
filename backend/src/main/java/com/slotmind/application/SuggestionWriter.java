@@ -59,7 +59,7 @@ public class SuggestionWriter {
             return views.toResponse(reload(appointmentId), existing.get());
         }
         Appointment appointment = reload(appointmentId);
-        if (appointment.getStatus() == AppointmentStatus.CONFIRMED) {
+        if (AppointmentStatus.MOVABLE.contains(appointment.getStatus())) {
             appointment.markReschedulePending();
         } else if (appointment.getStatus() != AppointmentStatus.RESCHEDULE_PENDING) {
             throw new DomainException(
